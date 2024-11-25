@@ -1,5 +1,4 @@
-'use client';
-
+"use client";
 import { useEffect, useState } from 'react';
 import RoomForm from '@/components/rooms/RoomForm';
 import { toast } from '@/hooks/use-toast';
@@ -11,25 +10,35 @@ import { roomService, type Room } from '@/lib/services/roomService';
 export default function RoomEditPage({
   params,
 }: {
-  params: { id: string };
+  params: { id: string } | undefined;
 }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!params) {
+      toast({
+        title: 'Error',
+        description: 'Room not found',
+        variant: 'destructive',
+      });
+      setIsLoading(false);
+      return;
+    }
     roomService.initialize();
     const loadedRoom = roomService.getRoomById(params.id);
     if (loadedRoom) {
       setRoom(loadedRoom);
+      setIsLoading(false);
     } else {
       toast({
         title: 'Error',
         description: 'Room not found',
         variant: 'destructive',
       });
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, [params.id]);
+  }, [params]);
 
   if (isLoading) {
     return (

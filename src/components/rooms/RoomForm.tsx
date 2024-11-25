@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import { roomService, type Room } from '@/lib/services/roomService';
+import Image from 'next/image';
+import { X } from 'lucide-react';
 
 interface RoomFormProps {
   initialData?: Room;
@@ -17,15 +19,22 @@ interface RoomFormProps {
 export default function RoomForm({ initialData, mode }: RoomFormProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Omit<Room, 'id'>>(
     initialData || {
       number: '',
       type: 'Deluxe',
       status: 'available',
       price: 0,
-      image: '',
+      images: [],
     }
   );
+
+  useEffect(() => {
+    if (initialData?.images) {
+      setFormData(prev => ({ ...prev, images: initialData.images }));
+    }
+  }, [initialData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,12 +67,36 @@ export default function RoomForm({ initialData, mode }: RoomFormProps) {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      const newImages: string[] = [];
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          newImages.push(result);
+          setFormData(prev => ({ ...prev, images: [...prev.images, ...newImages] }));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index)
+    }));
+  };
+
   return (
     <Card className="p-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Room Number</label>
+          <label htmlFor="roomNumber" className="block text-sm font-medium text-gray-700">Room Number</label>
           <Input
+            id="roomNumber"
             type="text"
             value={formData.number}
             onChange={(e) => setFormData({ ...formData, number: e.target.value })}
@@ -72,8 +105,8 @@ export default function RoomForm({ initialData, mode }: RoomFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Type</label>
-          <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+          <label htmlFor="roomType" className="block text-sm font-medium text-gray-700">Type</label>
+          <Select id="roomType" value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
             <SelectTrigger>
               <SelectValue placeholder="Select room type" />
             </SelectTrigger>
@@ -86,8 +119,8 @@ export default function RoomForm({ initialData, mode }: RoomFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Status</label>
-          <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+          <label htmlFor="roomStatus" className="block text-sm font-medium text-gray-700">Status</label>
+          <Select id="roomStatus" value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
             <SelectTrigger>
               <SelectValue placeholder="Select room status" />
             </SelectTrigger>
@@ -101,8 +134,9 @@ export default function RoomForm({ initialData, mode }: RoomFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Price</label>
+          <label htmlFor="roomPrice" className="block text-sm font-medium text-gray-700">Price</label>
           <Input
+            id="roomPrice"
             type="number"
             value={formData.price}
             onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
@@ -111,13 +145,47 @@ export default function RoomForm({ initialData, mode }: RoomFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Image URL</label>
-          <Input
-            type="url"
-            value={formData.image}
-            onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-            required
-          />
+          <label htmlFor="roomImage" className="block text-sm font-medium text-gray-700">Image</label>
+          <div className="mt-1">
+            <Input
+              id="roomImages"
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              multiple
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Add Images
+            </Button>
+            <p className="mt-2 text-sm text-gray-500">
+              You can select one or more images
+            </p>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+            {formData.images.map((image, index) => (
+              <div key={index} className="relative aspect-square">
+                <Image
+                  src={image}
+                  alt={`Room preview ${index + 1}`}
+                  fill
+                  className="object-cover rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveImage(index)}
+                  className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:bg-gray-100"
+                >
+                  <X className="h-4 w-4 text-gray-600" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="flex justify-end space-x-2">

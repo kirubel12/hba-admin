@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/consistent-indexed-object-style */
 'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Plus, Search, Filter, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -26,18 +30,28 @@ const roomStatuses = {
   reserved: 'bg-blue-100 text-blue-800',
 };
 
+interface ImageIndex {
+  [key: string]: number;
+}
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<ImageIndex>({});
 
   useEffect(() => {
     roomService.initialize();
     const loadedRooms = roomService.getAllRooms();
     setRooms(loadedRooms);
     setIsLoading(false);
+    const initialImageIndices = loadedRooms.reduce((acc, room) => {
+      acc[room.id] = 0;
+      return acc;
+    }, {} as ImageIndex);
+    setCurrentImageIndex(initialImageIndices);
   }, []);
 
   const handleDeleteRoom = (room: Room) => {
@@ -47,10 +61,10 @@ export default function RoomsPage() {
         title: 'Success',
         description: 'Room deleted successfully',
       });
-      setRooms(rooms.filter((r) => r.id !== room.id));
+      setRooms((rooms) => rooms?.filter((r) => r.id !== room.id) || []);
     } else {
       toast({
-        title: 'Error',
+        title: 'Failed to delete room',
         description: 'Failed to delete room',
         variant: 'destructive',
       });
@@ -58,10 +72,28 @@ export default function RoomsPage() {
     setDeleteDialogOpen(false);
   };
 
-  const filteredRooms = rooms.filter((room) =>
+  const filteredRooms = rooms?.filter((room) =>
     room.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     room.type.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ) || [];
+
+  const handlePrevImage = (roomId: string) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room?.images?.length) return;
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] - 1 + room.images.length) % room.images.length,
+    }));
+  };
+
+  const handleNextImage = (roomId: string) => {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room?.images?.length) return;
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] + 1) % room.images.length,
+    }));
+  };
 
   return (
     <>
@@ -99,12 +131,32 @@ export default function RoomsPage() {
               {filteredRooms.map((room) => (
                 <Card key={room.id} className="overflow-hidden">
                   <div className="relative h-48">
-                    <Image
-                      src={room.image}
-                      alt={`Room ${room.number}`}
-                      fill
-                      className="object-cover"
-                    />
+                    {room.images?.length > 0 && (
+                      <>
+                        <Image
+                          src={room.images[currentImageIndex[room.id] || 0]}
+                          alt={`Room ${room.number}`}
+                          fill
+                          className="object-cover"
+                        />
+                        {room.images.length > 1 && (
+                          <>
+                            <Button
+                              className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1 text-white"
+                              onClick={() => handlePrevImage(room.id)}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1 text-white"
+                              onClick={() => handleNextImage(room.id)}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="p-4">
                     <div className="mb-2 flex items-center justify-between">
@@ -139,30 +191,27 @@ export default function RoomsPage() {
               ))}
             </div>
           )}
-
-          <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete Room</DialogTitle>
-                <DialogDescription>
-                  Are you sure you want to delete Room {roomToDelete?.number}? This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => roomToDelete && handleDeleteRoom(roomToDelete)}
-                >
-                  Delete
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </main>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete Room {roomToDelete?.number}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => roomToDelete && handleDeleteRoom(roomToDelete)}>
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
